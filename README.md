@@ -1,21 +1,38 @@
-# Billr Dashboard (HTML + SQLite + Docker)
+# Billr Dashboard (with Login, SQLite, PDF Invoices)
 
-Your dashboard UI runs as an HTML app, and now saves data in a real SQLite database instead of browser localStorage.
+## What changed
+- Added login lock (session-based authentication).
+- Fixed all navigation tabs so Dashboard / Log / Projects / Clients / Invoices are connected and render properly.
+- Added real invoice PDF generation endpoint and download button.
+- Added freelancer-focused extras:
+  - monthly income goal tracking
+  - CSV export for logs
+  - project-linked work logs
 
-## Where data is stored
-- **Database file:** `./data/billr.db` on your host machine.
-- Inside container: `/app/data/billr.db`.
+## Default login
+- Username: `admin`
+- Password: `admin123`
 
-Because `docker-compose.yml` mounts `./data:/app/data`, your data persists even if you rebuild/restart containers.
+You can override at startup with env vars:
+- `APP_USERNAME`
+- `APP_PASSWORD`
+- `APP_SECRET`
 
-## Run locally with Docker
+## Data storage
+- SQLite file on host: `./data/billr.db`
+- In container: `/app/data/billr.db`
+
+## Run with Docker
 ```bash
 docker compose up --build
 ```
+
 Open: `http://localhost:2555`
 
-## API used by the frontend
-- `GET /api/state` → load whole dashboard state.
-- `PUT /api/state` → save whole dashboard state.
-
-The frontend keeps your existing layout and features, but storage is now server-side SQLite.
+## API
+- `POST /api/login`
+- `POST /api/logout`
+- `GET /api/me`
+- `GET /api/state`
+- `PUT /api/state`
+- `GET /api/invoices/<invoice_id>/pdf`
