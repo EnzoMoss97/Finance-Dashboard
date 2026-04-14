@@ -1,0 +1,9 @@
+services:
+  billr:
+    build: .
+    container_name: billr-dashboard
+    ports:
+      - "2555:2555"
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped

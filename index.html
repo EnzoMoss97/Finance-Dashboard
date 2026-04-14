@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Billr</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+  <style>
+    :root{--bg:#0d0d0f;--surface:#16161a;--surface2:#1e1e24;--border:#2a2a31;--text:#f2f2f2;--muted:#9ea0a8;--accent:#c8f564;--green:#5be8a0;--amber:#f6a832;--blue:#5b9cf6;--red:#f46b6b}
+    *{box-sizing:border-box} body{margin:0;font-family:Inter,system-ui;background:var(--bg);color:var(--text)}
+    .app{display:flex;min-height:100vh} .sidebar{width:220px;background:var(--surface);border-right:1px solid var(--border);padding:18px;position:fixed;top:0;bottom:0}
+    .main{margin-left:220px;padding:24px;flex:1} .logo{font-weight:700;color:var(--accent);font-size:20px;margin-bottom:16px}
+    .nav-item{padding:10px 12px;border-radius:8px;margin-bottom:6px;color:var(--muted);cursor:pointer} .nav-item.active,.nav-item:hover{background:var(--surface2);color:var(--text)}
+    .rate{margin-top:20px;padding:12px;background:var(--surface2);border-radius:10px;border:1px solid var(--border)}
+    .grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px} .card{background:var(--surface);border:1px solid var(--border);padding:16px;border-radius:12px}
+    .metric{font-size:28px;font-weight:700} .muted{color:var(--muted);font-size:12px}
+    .row{display:grid;grid-template-columns:2fr 1fr;gap:12px;margin-top:12px}
+    .page{display:none}.page.active{display:block}
+    button,input,select,textarea{background:var(--surface2);color:var(--text);border:1px solid #333;border-radius:8px;padding:10px;width:100%}
+    button{cursor:pointer}.btn-primary{background:var(--accent);color:#101010;border:none;font-weight:600}
+    table{width:100%;border-collapse:collapse} th,td{padding:10px;border-top:1px solid var(--border);text-align:left} th{color:var(--muted);font-size:11px;text-transform:uppercase}
+    .modal{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:30}
+    .modal.open{display:flex}.modal-box{width:700px;max-width:94vw;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px}
+    .login-wrap{position:fixed;inset:0;background:#0a0a0c;display:flex;align-items:center;justify-content:center;z-index:60}
+    .login-card{width:360px;background:var(--surface);border:1px solid var(--border);padding:20px;border-radius:12px}
+    .badge{padding:3px 7px;border-radius:999px;font-size:11px}.paid{background:rgba(91,232,160,.15);color:var(--green)}.unpaid{background:rgba(246,168,50,.15);color:var(--amber)}.invoiced{background:rgba(91,156,246,.15);color:var(--blue)}
+    .toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+    .inline-btn{width:auto}
+    .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .form-stack{display:grid;gap:10px}
+    .modal-actions{display:flex;justify-content:flex-end;margin-top:12px}
+    @media (max-width: 760px){.form-grid{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+<div id="login-screen" class="login-wrap">
+  <div class="login-card">
+    <h3>Billr Login</h3>
+    <p class="muted">Default: admin / admin123</p>
+    <div style="display:grid;gap:8px">
+      <input id="login-user" placeholder="Username" value="admin" />
+      <input id="login-pass" type="password" placeholder="Password" value="admin123" />
+      <button class="btn-primary inline-btn" onclick="login()">Sign In</button>
+      <div id="login-error" class="muted" style="color:var(--red)"></div>
+    </div>
+  </div>
+</div>
+
+<div class="app">
+  <aside class="sidebar">
+    <div class="logo">Billr</div>
+    <div class="nav-item active" onclick="showPage('dashboard')">Dashboard</div>
+    <div class="nav-item" onclick="showPage('log')">Log Work</div>
+    <div class="nav-item" onclick="showPage('projects')">Projects</div>
+    <div class="nav-item" onclick="showPage('clients')">Clients</div>
+    <div class="nav-item" onclick="showPage('invoices')">Invoices</div>
+    <div class="rate">
+      <div class="muted">Hourly Rate</div>
+      <div id="sidebar-rate" class="metric">$0</div>
+      <button class="inline-btn" onclick="openRate()">Edit Rate</button>
+      <button class="inline-btn" style="margin-top:8px" onclick="logout()">Logout</button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div id="page-dashboard" class="page active">
+      <h2>Dashboard</h2>
+      <div class="toolbar">
+        <input id="goal-input" type="number" placeholder="Monthly goal" style="width:180px" />
+        <button class="inline-btn" onclick="saveGoal()">Save Goal</button>
+        <button class="inline-btn" onclick="downloadLogsCSV()">Export Logs CSV</button>
+      </div>
+      <div class="grid">
+        <div class="card"><div class="muted">This Month</div><div id="m-month" class="metric">$0</div></div>
+        <div class="card"><div class="muted">Unpaid</div><div id="m-unpaid" class="metric">$0</div></div>
+        <div class="card"><div class="muted">All Time</div><div id="m-total" class="metric">$0</div></div>
+        <div class="card"><div class="muted">Goal Progress</div><div id="m-goal" class="metric">0%</div></div>
+      </div>
+      <div class="row">
+        <div class="card"><canvas id="incomeChart" height="120"></canvas></div>
+        <div class="card"><canvas id="clientChart" height="120"></canvas></div>
+      </div>
+    </div>
+
+    <div id="page-log" class="page">
+      <h2>Work Logs</h2>
+      <div class="toolbar">
+        <button class="btn-primary inline-btn" onclick="openLog()">+ Add Log</button>
+        <select id="log-filter" onchange="renderLog()" style="width:auto"><option value="all">All</option><option value="unpaid">Unpaid</option><option value="paid">Paid</option></select>
+      </div>
+      <div class="card"><table><thead><tr><th>Date</th><th>Client</th><th>Project</th><th>Description</th><th>Hours</th><th>Amount</th><th>Status</th><th></th></tr></thead><tbody id="log-tbody"></tbody></table></div>
+    </div>
+
+    <div id="page-projects" class="page">
+      <h2>Projects</h2>
+      <div class="toolbar"><button class="btn-primary inline-btn" onclick="openProject()">+ New Project</button></div>
+      <div class="card"><table><thead><tr><th>Name</th><th>Client</th><th>Status</th><th>Earned</th></tr></thead><tbody id="projects-tbody"></tbody></table></div>
+    </div>
+
+    <div id="page-clients" class="page">
+      <h2>Clients</h2>
+      <div class="toolbar"><button class="btn-primary inline-btn" onclick="openClient()">+ Add Client</button></div>
+      <div class="card"><table><thead><tr><th>Name</th><th>Email</th><th>Total Billed</th></tr></thead><tbody id="clients-tbody"></tbody></table></div>
+    </div>
+
+    <div id="page-invoices" class="page">
+      <h2>Invoices</h2>
+      <div class="toolbar"><button class="btn-primary inline-btn" onclick="openInvoice()">+ Generate Invoice</button></div>
+      <div class="card"><table><thead><tr><th>#</th><th>Client</th><th>Date</th><th>Total</th><th>Status</th><th></th></tr></thead><tbody id="invoices-tbody"></tbody></table></div>
+    </div>
+  </main>
+</div>
+
+<div id="modal-rate" class="modal"><div class="modal-box"><h3>Hourly Rate</h3><div class="form-stack"><input id="input-rate" type="number" /></div><div class="modal-actions"><button onclick="saveRate()" class="btn-primary inline-btn">Save</button></div></div></div>
+<div id="modal-client" class="modal"><div class="modal-box"><h3>Add Client</h3><div class="form-stack"><input id="client-name" placeholder="Client name" /><input id="client-email" placeholder="Email" /></div><div class="modal-actions"><button onclick="saveClient()" class="btn-primary inline-btn">Save</button></div></div></div>
+<div id="modal-project" class="modal"><div class="modal-box"><h3>Add Project</h3><div class="form-grid"><input id="proj-name" placeholder="Project name" /><select id="proj-client"></select></div><div class="modal-actions"><button onclick="saveProject()" class="btn-primary inline-btn">Save</button></div></div></div>
+<div id="modal-log" class="modal"><div class="modal-box"><h3>Add Work Log</h3><div class="form-grid"><input id="log-date" type="date" /><select id="log-client"></select></div><div class="form-stack" style="margin-top:10px"><select id="log-project"></select><textarea id="log-desc" placeholder="Description"></textarea></div><div class="form-grid" style="margin-top:10px"><input id="log-hours" type="number" step="0.25" placeholder="Hours" /><input id="log-rate" type="number" placeholder="Rate override (optional)" /></div><div style="margin-top:10px"><select id="log-status"><option value="unpaid">Unpaid</option><option value="invoiced">Invoiced</option><option value="paid">Paid</option></select></div><div class="modal-actions"><button onclick="saveLog()" class="btn-primary inline-btn">Save</button></div></div></div>
+<div id="modal-invoice" class="modal"><div class="modal-box"><h3>Generate Invoice</h3><div class="form-stack"><select id="inv-client"></select><input id="inv-date" type="date" /><textarea id="inv-notes" placeholder="Notes / terms"></textarea></div><div class="modal-actions"><button onclick="generateInvoice()" class="btn-primary inline-btn">Generate</button></div></div></div>
+
+<script>
+const DB_API='/api/state';
+let db={rate:0,monthlyGoal:5000,clients:[],projects:[],logs:[],invoices:[],nextId:1};
+let incomeChart,clientChart;
+
+const fmt=n=>'$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+const uid=()=>db.nextId++;
+const clientName=id=>(db.clients.find(c=>c.id===id)||{}).name||'—';
+const projectName=id=>(db.projects.find(p=>p.id===id)||{}).name||'—';
+
+async function api(path, opts={}){ const r=await fetch(path,{credentials:'include',headers:{'Content-Type':'application/json'},...opts}); if(r.status===401) return {unauthorized:true}; if(r.headers.get('content-type')?.includes('application/json')) return await r.json(); return r; }
+async function load(){ const data=await api(DB_API); if(data?.state) db={...db,...data.state}; }
+async function save(){ await api(DB_API,{method:'PUT',body:JSON.stringify({state:db})}); }
+
+async function login(){ const username=document.getElementById('login-user').value; const password=document.getElementById('login-pass').value; const res=await api('/api/login',{method:'POST',body:JSON.stringify({username,password})}); if(!res.ok){document.getElementById('login-error').textContent=res.error||'Login failed';return;} document.getElementById('login-screen').style.display='none'; await initApp(); }
+async function logout(){ await api('/api/logout',{method:'POST'}); location.reload(); }
+
+async function init(){ const me=await api('/api/me'); if(me.authenticated){ document.getElementById('login-screen').style.display='none'; await initApp(); } }
+async function initApp(){ await load(); document.getElementById('goal-input').value=db.monthlyGoal||5000; updateRate(); renderAll(); }
+
+function showPage(name){ document.querySelectorAll('.page').forEach(p=>p.classList.remove('active')); document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active')); document.getElementById('page-'+name).classList.add('active'); const idx=['dashboard','log','projects','clients','invoices'].indexOf(name); if(idx>=0) document.querySelectorAll('.nav-item')[idx].classList.add('active'); }
+function open(id){ document.getElementById(id).classList.add('open'); }
+function close(id){ document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('.modal').forEach(m=>m.onclick=e=>{ if(e.target===m) m.classList.remove('open'); });
+
+function openRate(){ document.getElementById('input-rate').value=db.rate||0; open('modal-rate'); }
+async function saveRate(){ db.rate=Number(document.getElementById('input-rate').value||0); await save(); updateRate(); renderDashboard(); close('modal-rate'); }
+function updateRate(){ document.getElementById('sidebar-rate').textContent='$'+(db.rate||0); }
+
+function populateSelect(id, list, label, withNone=true){ const el=document.getElementById(id); el.innerHTML=withNone?'<option value="">Select...</option>':''; list.forEach(i=>{const o=document.createElement('option'); o.value=i.id; o.textContent=i[label]; el.appendChild(o);}); }
+
+function openClient(){ document.getElementById('client-name').value=''; document.getElementById('client-email').value=''; open('modal-client'); }
+async function saveClient(){ const name=document.getElementById('client-name').value.trim(); if(!name) return; db.clients.push({id:uid(),name,email:document.getElementById('client-email').value.trim()}); await save(); renderClients(); close('modal-client'); }
+
+function openProject(){ document.getElementById('proj-name').value=''; populateSelect('proj-client',db.clients,'name'); open('modal-project'); }
+async function saveProject(){ const name=document.getElementById('proj-name').value.trim(); if(!name) return; db.projects.push({id:uid(),name,clientId:Number(document.getElementById('proj-client').value)||null,status:'active'}); await save(); renderProjects(); close('modal-project'); }
+
+function openLog(){ document.getElementById('log-date').value=new Date().toISOString().split('T')[0]; document.getElementById('log-desc').value=''; document.getElementById('log-hours').value=''; document.getElementById('log-rate').value=''; populateSelect('log-client',db.clients,'name'); populateSelect('log-project',db.projects,'name'); open('modal-log'); }
+async function saveLog(){ const date=document.getElementById('log-date').value; const desc=document.getElementById('log-desc').value.trim(); const hours=Number(document.getElementById('log-hours').value||0); if(!date||!desc||!hours) return; const rate=Number(document.getElementById('log-rate').value||db.rate||0); db.logs.push({id:uid(),date,desc,hours,rateOverride:rate===db.rate?null:rate,amount:Number((hours*rate).toFixed(2)),status:document.getElementById('log-status').value,clientId:Number(document.getElementById('log-client').value)||null,projectId:Number(document.getElementById('log-project').value)||null,type:'hourly'}); await save(); renderLog(); renderDashboard(); close('modal-log'); }
+async function markPaid(id){ const e=db.logs.find(l=>l.id===id); if(!e) return; e.status='paid'; await save(); renderLog(); renderDashboard(); }
+async function deleteLog(id){ db.logs=db.logs.filter(l=>l.id!==id); await save(); renderLog(); renderDashboard(); }
+
+function openInvoice(){ populateSelect('inv-client',db.clients,'name'); document.getElementById('inv-date').value=new Date().toISOString().split('T')[0]; document.getElementById('inv-notes').value='Payment due in 14 days'; open('modal-invoice'); }
+async function generateInvoice(){ const clientId=Number(document.getElementById('inv-client').value); if(!clientId) return; const entries=db.logs.filter(l=>l.clientId===clientId && l.status==='unpaid'); if(!entries.length) return alert('No unpaid logs for this client'); const number='INV-'+String(db.invoices.length+1).padStart(4,'0'); const entryIds=entries.map(e=>e.id); const total=entries.reduce((s,e)=>s+e.amount,0); db.invoices.push({id:uid(),number,clientId,date:document.getElementById('inv-date').value,notes:document.getElementById('inv-notes').value,total,status:'sent',entryIds}); entryIds.forEach(i=>{const e=db.logs.find(l=>l.id===i); if(e)e.status='invoiced';}); await save(); renderInvoices(); renderLog(); renderDashboard(); close('modal-invoice'); }
+async function downloadInvoicePdf(id){
+  const res = await fetch(`/api/invoices/${id}/pdf`, { credentials:'include' });
+  if (!res.ok) { alert('Could not generate PDF. Please login again.'); return; }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `invoice-${id}.pdf`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function saveGoal(){ db.monthlyGoal=Number(document.getElementById('goal-input').value||0); save(); renderDashboard(); }
+function downloadLogsCSV(){ const rows=[['Date','Client','Project','Description','Hours','Amount','Status'],...db.logs.map(l=>[l.date,clientName(l.clientId),projectName(l.projectId),l.desc,l.hours,l.amount,l.status])]; const csv=rows.map(r=>r.map(v=>`"${String(v??'').replaceAll('"','""')}"`).join(',')).join('\n'); const blob=new Blob([csv],{type:'text/csv'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='billr-logs.csv'; a.click(); URL.revokeObjectURL(a.href); }
+
+function renderDashboard(){ const now=new Date(); const monthLogs=db.logs.filter(l=>{const d=new Date(l.date);return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear();}); const month=monthLogs.reduce((s,l)=>s+l.amount,0); const unpaid=db.logs.filter(l=>l.status==='unpaid').reduce((s,l)=>s+l.amount,0); const total=db.logs.reduce((s,l)=>s+l.amount,0); const goal=db.monthlyGoal||1; document.getElementById('m-month').textContent=fmt(month); document.getElementById('m-unpaid').textContent=fmt(unpaid); document.getElementById('m-total').textContent=fmt(total); document.getElementById('m-goal').textContent=Math.min(999,Math.round(month/goal*100))+'%'; const labels=[]; const data=[]; for(let i=5;i>=0;i--){const d=new Date(); d.setMonth(d.getMonth()-i); labels.push(d.toLocaleString('en-US',{month:'short'})); data.push(db.logs.filter(l=>{const ld=new Date(l.date); return ld.getMonth()===d.getMonth()&&ld.getFullYear()===d.getFullYear();}).reduce((s,l)=>s+l.amount,0));} if(incomeChart)incomeChart.destroy(); incomeChart=new Chart(document.getElementById('incomeChart'),{type:'bar',data:{labels,datasets:[{data,backgroundColor:'#c8f564'}]},options:{plugins:{legend:{display:false}}}}); const by={}; db.logs.forEach(l=>{const k=clientName(l.clientId); by[k]=(by[k]||0)+l.amount;}); if(clientChart)clientChart.destroy(); clientChart=new Chart(document.getElementById('clientChart'),{type:'doughnut',data:{labels:Object.keys(by),datasets:[{data:Object.values(by)}]}}); }
+function renderLog(){ const filter=document.getElementById('log-filter').value; let logs=[...db.logs].sort((a,b)=>new Date(b.date)-new Date(a.date)); if(filter!=='all') logs=logs.filter(l=>l.status===filter); document.getElementById('log-tbody').innerHTML=logs.map(l=>`<tr><td>${l.date}</td><td>${clientName(l.clientId)}</td><td>${projectName(l.projectId)}</td><td>${l.desc}</td><td>${l.hours}</td><td>${fmt(l.amount)}</td><td><span class="badge ${l.status}">${l.status}</span></td><td><button class="inline-btn" onclick="markPaid(${l.id})">Paid</button> <button class="inline-btn" onclick="deleteLog(${l.id})">Delete</button></td></tr>`).join(''); }
+function renderProjects(){ document.getElementById('projects-tbody').innerHTML=db.projects.map(p=>{const earned=db.logs.filter(l=>l.projectId===p.id).reduce((s,l)=>s+l.amount,0); return `<tr><td>${p.name}</td><td>${clientName(p.clientId)}</td><td>${p.status||'active'}</td><td>${fmt(earned)}</td></tr>`}).join(''); }
+function renderClients(){ document.getElementById('clients-tbody').innerHTML=db.clients.map(c=>{const total=db.logs.filter(l=>l.clientId===c.id).reduce((s,l)=>s+l.amount,0); return `<tr><td>${c.name}</td><td>${c.email||'—'}</td><td>${fmt(total)}</td></tr>`}).join(''); }
+function renderInvoices(){ document.getElementById('invoices-tbody').innerHTML=[...db.invoices].sort((a,b)=>(b.id-a.id)).map(i=>`<tr><td>${i.number}</td><td>${clientName(i.clientId)}</td><td>${i.date}</td><td>${fmt(i.total)}</td><td><span class="badge ${i.status==='paid'?'paid':'invoiced'}">${i.status}</span></td><td><button class="inline-btn" onclick="downloadInvoicePdf(${i.id})">PDF</button></td></tr>`).join(''); }
+function renderAll(){ renderDashboard(); renderLog(); renderProjects(); renderClients(); renderInvoices(); }
+
+init();
+</script>
+</body>
+</html>
