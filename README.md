@@ -12,7 +12,6 @@ Because `docker-compose.yml` mounts `./data:/app/data`, your data persists even 
 ```bash
 docker compose up --build
 ```
-
 Open: `http://localhost:2555`
 
 ## API used by the frontend
