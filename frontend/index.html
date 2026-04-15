@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Aviation Ops Dashboard</title>
+  <style>
+    body{font-family:system-ui,-apple-system,sans-serif;background:#0d1117;color:#e6edf3;margin:0}
+    .wrap{max-width:1100px;margin:auto;padding:16px}
+    .card{background:#161b22;border:1px solid #30363d;border-radius:12px;padding:12px;margin-bottom:12px}
+    .row{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+    input,select,button{width:100%;padding:8px;border-radius:8px;border:1px solid #30363d;background:#21262d;color:#e6edf3}
+    table{width:100%;border-collapse:collapse} th,td{border-top:1px solid #30363d;padding:8px;text-align:left}
+    .SAFE{color:#3fb950}.WARNING{color:#d29922}.OVERLOAD{color:#f85149}
+    @media (max-width:900px){.row{grid-template-columns:1fr 1fr}}
+    @media (max-width:600px){.row{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <h2>Aviation Booking & Operations</h2>
+  <div class="card">
+    <h3>Login</h3>
+    <div class="row">
+      <input id="user" placeholder="username" value="dispatcher" />
+      <input id="pass" type="password" value="dispatch123" />
+      <button onclick="login()">Login</button>
+      <div id="me"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Today's Dispatch Dashboard</h3>
+    <button onclick="loadDispatch()">Refresh Today Flights</button>
+    <table><thead><tr><th>Flight</th><th>Aircraft</th><th>PAX</th><th>Cargo(kg)</th><th>Load %</th><th>Safety</th></tr></thead><tbody id="dispatch"></tbody></table>
+  </div>
+
+  <div class="card">
+    <h3>Quick Booking (PAX/Cargo)</h3>
+    <div class="row">
+      <select id="bookingType"><option>PAX</option><option>CARGO</option></select>
+      <input id="flightId" type="number" placeholder="Flight ID"/>
+      <input id="price" type="number" placeholder="Total Price"/>
+      <button onclick="createBooking()">Create Booking</button>
+    </div>
+    <div id="bookingMsg"></div>
+  </div>
+
+  <div class="card">
+    <h3>Revenue Summary</h3>
+    <button onclick="loadRevenue()">Load Daily Report</button>
+    <table><thead><tr><th>Flight</th><th>PAX</th><th>Cargo</th><th>Revenue</th><th>Cost</th><th>Profit</th></tr></thead><tbody id="revenue"></tbody></table>
+  </div>
+</div>
+<script>
+let token='';
+function authHeaders(){return token?{Authorization:`Bearer ${token}`}:{}}
+async function api(path, opts={}){const r=await fetch('/api'+path,{headers:{'Content-Type':'application/json',...authHeaders(),...(opts.headers||{})},...opts});if(r.status>=400){throw new Error(await r.text())}return r.json()}
+async function login(){
+  const form = new URLSearchParams();
+  form.set('username',document.getElementById('user').value);
+  form.set('password',document.getElementById('pass').value);
+  const r=await fetch('/api/auth/login',{method:'POST',body:form});
+  const j=await r.json();
+  token=j.access_token;
+  document.getElementById('me').textContent = `Role: ${j.role}`;
+}
+async function loadDispatch(){
+  const rows=await api('/dispatch/today');
+  document.getElementById('dispatch').innerHTML = rows.map(r=>`<tr><td>${r.id}</td><td>${r.aircraft}</td><td>${r.pax_count}</td><td>${r.cargo_weight}</td><td>${r.load_factor}</td><td class='${r.status}'>${r.status}</td></tr>`).join('');
+}
+async function createBooking(){
+  const payload={type:document.getElementById('bookingType').value,status:'reserved',payment_status:'pending',total_price:Number(document.getElementById('price').value||0),flight_id:Number(document.getElementById('flightId').value)};
+  try{const r=await api('/bookings',{method:'POST',body:JSON.stringify(payload)});document.getElementById('bookingMsg').textContent=`Booking #${r.id} created`;}
+  catch(e){document.getElementById('bookingMsg').textContent='Failed: '+e.message}
+}
+async function loadRevenue(){
+  const rows=await api('/reports/revenue?period=daily');
+  document.getElementById('revenue').innerHTML=rows.map(r=>`<tr><td>${r.flight_id}</td><td>${r.pax_revenue}</td><td>${r.cargo_revenue}</td><td>${r.total_revenue}</td><td>${r.total_cost}</td><td>${r.profit}</td></tr>`).join('')
+}
+</script>
+</body>
+</html>

@@ -1,9 +1,38 @@
 services:
-  billr:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: aviation
+      POSTGRES_USER: aviation
+      POSTGRES_PASSWORD: aviation
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  backend:
     build: .
-    container_name: billr-dashboard
-    ports:
-      - "2555:2555"
+    environment:
+      DATABASE_URL: postgresql+psycopg://aviation:aviation@postgres:5432/aviation
+      SQLITE_SYNC_DB_URL: sqlite:///./data/offline_sync.db
+      JWT_SECRET: super-secret-change-me
+    depends_on:
+      - postgres
     volumes:
       - ./data:/app/data
     restart: unless-stopped
+
+  nginx:
+    image: nginx:1.27-alpine
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./frontend:/usr/share/nginx/html:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/certs:/etc/nginx/certs:ro
+    restart: unless-stopped
+
+volumes:
+  pg_data:
